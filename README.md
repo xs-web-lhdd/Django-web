@@ -362,4 +362,180 @@ class Comment(models.Model):
     score = models.FloatField('分数', default=5)
 ```
 
+## CRUD
+### 练习 CRUD 前构建的数据库的表
+```python
+from django.db import models
+
+
+# Create your models here.
+class CommonModel(models.Model):
+    created_at = models.DateTimeField('添加字段时间', auto_now_add=True)
+    updated_at = models.DateTimeField('最后修改时间', auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class User(CommonModel):
+    """用户基本信息"""
+    USER_STATUS = (
+        (1, '正常'),
+        (0, '删除')
+    )
+    username = models.CharField('用户名', max_length=64, unique=True)
+    password = models.CharField('密码', max_length=256)
+    nickname = models.CharField('用户昵称', max_length=64, null=True, blank=True)
+    avatar = models.ImageField('用户头像', upload_to='avatar', null=True, blank=True)
+    status = models.SmallIntegerField('用户状态', default=1, choices=USER_STATUS)
+    is_super = models.BooleanField('是否为超级用户', default=False)
+
+    class Meta:
+        db_table = 'demo_user'
+
+
+class UserProfile(CommonModel):
+    """用户详细信息"""
+    SEX = (
+        (1, '男性'),
+        (0, '未知'),
+        (2, '女性')
+    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile', verbose_name='关联用户')
+    username = models.CharField('用户名', max_length=64, unique=True)
+    real_name = models.CharField('真实姓名', max_length=64, null=True, blank=True)
+    sex = models.SmallIntegerField('用户性别', default=0, choices=SEX)
+    mamix = models.CharField('用户格言', max_length=128, null=True, blank=True)
+    address = models.CharField('用户地址', max_length=128, null=True, blank=True)
+
+    class Meta:
+        db_table = 'demo_user_profile'
+
+
+class LoginHistory(models.Model):
+    """用户的登陆历史"""
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='login_history', verbose_name='关联的用户')
+    username = models.CharField('用户名', max_length=64)
+    login_type = models.CharField('登陆平台', max_length=64)
+    ip = models.CharField('IP地址', max_length=32, default='')
+    ua = models.CharField('登陆的来源', max_length=512, default='')
+    created_at = models.DateTimeField('登陆时间', auto_now_add=True)
+
+    class Meta:
+        db_table = 'demo_user_history'
+        # 用登陆时间进行排序，默认从小到大，添加 - ，变为从大到小
+        ordering = ['-created_at']
+```
+### Django shell
+- 从控制台(terminal)进入 `python manage.py shell`
+- 打开 pycharm 的控制台即可
+
+### 使用 ORM 新增数据
+- 使用 save() 保存数据
+- 使用 create() 新增数据
+- 使用 bulk_create() 批量新增数据
+#### 使用 save() 保存数据
+- 示例代码：
+```python
+from demo.models import User
+
+user_obj = User(username='admin',password='password')
+user_obj.save()
+```
+#### 使用 create() 新增数据
+- 示例代码：
+```python
+user_obj = User.objects.create(username='刘豪', password='password', nickname='张伟伟粉丝1号')
+user_obj.pk # 返回新增用户的 id
+```
+#### 使用 bulk_create() 批量新增数据
+- 示例代码：
+```python
+user1 = User(username='伟杰1',password='password'),
+user2 = User.objects.create(username='伟杰2', password='password', nickname='我是伟杰我最帅')
+user_list = [user1, user2]
+User.objects.bulk_create(user_list)
+```
+#### 外键关联数据的插入
+- 示例代码
+```python
+user = User(username='admin', password='password')
+LoginHistory.objects.create(user=user, *args, **kwargs)
+# 或者
+LoginHistory.objects.create(user_id=user.id, username='admin',login_type='web登陆')
+```
+
+### 使用 ORM 实现简单查询
+- get(**kwargs) 按照查询条件返回单挑数据
+- latest(*fields) / earliest(*fields) 返回最晚/最早的一条记录
+- first()/last() 返回第一条/最后一条数据
+- 使用 all() 查询所有数据
+#### 使用 get() 查询单条数据
+```python
+user_obj = User.objects.get(username='admin')
+# 获取 id username
+user_obj.id
+```
+#### latest(*fields) / earliest(*fields) 返回最晚/最早的一条记录
+```python
+# 最晚
+latest = LoginHistory.objects.latest('created_at')
+# 最早
+latest = LoginHistory.objects.earliest('created_at')
+```
+#### 使用 all() 查询所有数据
+- 实例代码
+```python
+User.objects.all()
+```
+#### 编程技巧
+- 注意异常的处理
+  - DoesNotExist 查询的记录不存在
+  - MultipleObjectsReturned 查询的记录有多条
+- 打印模型字符串 \_\_str__() 的使用
+```python
+# 在 User 表中加入以下函数
+def __str__():
+    return 'User: {}'.format(username)
+```
+#### Django 提供给的编程技巧
+- 若有则返回，若无则创建后返回 `object, created = User.objects.get_or_create()`
+- 如果没有则触发 404 异常 `get_object_or_404`
+
+### 使用 ORM 实现数据修改
+- 使用 save() 修改单条数据
+- 使用 update() 批量修改数据
+- 使用 bulk_update() 批量修改数据
+#### 使用 save() 修改单条数据
+```python
+# 感觉这样修改数据很方便
+user_obj = User.objects.get(username='admin')
+user_obj.nickname = '管理员'
+user_obj.save()
+```
+#### 使用 update() 批量修改数据
+```python
+user_list = User.objects.all()
+user_list.update(status=0)
+```
+<br/>条件：注意不能修改外键关联的对象
+#### 使用 bulk_update() 批量修改数据
+方法使用：bulk_update(objs, fields, batch_size=None)
+- objs 需要修改的记录列表
+- fields 指定需要修改的字段
+- batch_size 每次提交多少条记录进行修改
+
+### 使用 ORM 实现数据的物理删除
+- 使用模型的 delete() 删除数据
+  - 删除单条数据
+```python
+  user_obj = User.objects.get(username='刘豪')
+  user_obj.delete()
+```
+  - 删除多条数据（批量删除）
+```python
+  User.objects.all().delete()
+```
+<br/>物理删除：将数据从数据库干掉、干掉了就不占磁盘空间了、干掉了就找不回来了
+<br/>逻辑删除：将数据标记删除、删除后还占磁盘空间、删除后还可以恢复、删除后通过查询条件不展示给用户
 
