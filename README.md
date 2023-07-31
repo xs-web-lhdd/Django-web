@@ -152,3 +152,214 @@ urlpatterns += [
 ]
 ```
 
+# 数据库
+## 基础知识：
+### 与 Flask 的区别
+- Django 自带 ORM
+- Flask 需要使用扩展（SQLAlchemy 只是其中一个）
+
+### Django ORM 配置
+- 项目配置(settings.py)
+- 安装依赖
+#### 配置选项
+- default —— 默认的数据库，可配置多个数据，使用名称来区分
+- ENGINE —— 数据库引擎
+```python
+'django.db.backends.postgresql'
+'django.db.backends.mysql'
+'django.db.backends.sqlite3'
+'django.db.backends.oracle'
+```
+- NAME —— 数据库名称
+- USER —— 数据库登陆用户名
+- PASSWORD —— 数据库登陆密码
+- HOST —— 数据库访问地址
+- PORT —— 数据库访问端口
+
+- sqlite3 的配置选项：只需要指定数据库引擎和数据库文件名称即可
+
+```python
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'test_django',
+        'USER': 'root',
+        'PASSWORD': '1234567890',
+        'HOST': '127.0.0.1',
+        'PORT': '3306'
+    }
+}
+```
+
+#### 安装依赖
+`pip install mysqlclient`
+
+#### 数据库类型
+##### 文本
+- CharField、TextField 字符串、文本
+- FileField、ImageField 文件、图片
+- FilePathField 文件路径
+- EmailField 邮件地址
+- URLField URL地址
+##### 数字（整数）
+- IntegerField 整数
+- SmallIntegerField 整数
+- BigIntegerField 整数
+- BooleanField 布尔值(1, 0)
+- PositiveIntegerField 正整数
+##### 日期与时间
+- DateField 日期
+- TimeField 时间
+- DateTimeField 时期时间
+##### 特殊类型
+- OneToOneField 一对一关联
+- Foreignkey 外键关联
+- ManyToManyField 多对多关联
+- GenericForeignKey 复合关联
+
+### 模型同步 ！！！
+- 先编写一个模型：
+```python
+from django.db import models
+
+# Create your models here.
+class User(models.Model):
+    """用户模型"""
+    name = models.CharField('姓名', max_length=64)
+    sex = models.CharField('性别', max_length=1, choices=(
+        ('1', '帅哥'),
+        ('0', '美女')
+    ), default='1')
+    age = models.PositiveIntegerField('年龄', default=0)
+    username = models.CharField('用户名', max_length=64, unique=True)
+    password = models.CharField('密码', max_length=256)
+    remark = models.CharField('备注', max_length=64, null=True, blank=True)
+    email = models.EmailField('用户的邮箱', max_length=64, null=True, blank=True)
+    created_at = models.DateTimeField('注册时间', auto_now_add=True)
+    updated_at = models.DateTimeField('最后修改时间', auto_now=True)
+```
+- 前提：确认 settings.py
+  - 已将模型添加到 INSTALLED_APPS
+  - 确认数据库有没有手动创建，确认数据库配置是否正确
+- 步骤一：检查模型是否编写正确
+  - `python manage.py check`
+- 步骤二：使用 makemigrations 生成同步原语
+  - `python manage.py makemigrations`
+- 步骤三：使用 migrate 执行同步
+  - `python manage.py migrate`
+
+<br/>掌握模型同步就再也不需要去数据库改字段了！
+
+### 数据库的元数据
+#### 元数据的描述
+- 使用 Meta 类来表示
+- 对模型的补充说明
+- 示例：
+```python
+class Meta:
+    verbose_name = '用户基础信息'
+    verbose_name_plural = '用户基础信息'
+    db_table = 'oauth_user'
+```
+#### 参数含义：
+  - db_table 模型映射的数据库表的名称
+  - ordering 指定数据表的模型排序规则
+  - verbose_name 供编程查看的字段名称（便于阅读）
+  - abstract 抽象类，抽象类不会生成数据库表（可以将公共内容抽取出来成一个类，然后让其他类继承此类）
+  - proxy 代理模型（对父模型的功能进行扩充）
+
+<br/>元数据设置可以是ORM的模型功能更加强大，使用元数据可以指定数据库表名称，表内公共字段抽取成公共类供其他类继承
+
+### 外键关联类型
+#### 一对一
+- `OneToOneField(to, on_delete, parent_link=False, **options)`
+- 举例：用户信息进行分表
+#### 一对多
+- `ForeignKey(to, on_delete, **options)`
+- 举例：用户提问
+#### 多对多
+- `ManageToManage(to, **options)`
+- 举例：收藏问题
+#### 模型的参数选项
+- to 关联的模型（必传）
+  - 模型类
+  - 模型类（字符串）
+  - self
+- on_delete 删除选项（必传）
+  - CASCADE：关联删除
+  - PROTECT：受保护，不允许被删除
+  - SET_NULL：设置为None，需要添加选项null=True
+  - SET_DEFAULT：设置为默认值，需要添加选项 default
+  - SET()：传参设置值
+  - DO_NOTHING：什么也不做
+- related_name 是否需要反向引用，反向引用的名称
+- related_query_name 反向引用的名称
+
+### 复合类型 ！！！难点
+#### 举例：这里有订单表和景点表，建立对应评论表：
+```python
+class Sight(models.Model):
+    """景点表"""
+    name = models.CharField('景点名称', max_length=64)
+    address = models.CharField('景点地址', max_length=64)
+
+
+class Order(models.Model):
+    """订单表"""
+    sn = models.CharField('订单号', max_length=64)
+    amount = models.FloatField('订单金额')
+
+
+class SightComment(models.Model):
+    """景点评论"""
+    content = models.CharField('评论内容', max_length=512)
+    score = models.FloatField('分数', default=5)
+
+
+class OrderComment(models.Model):
+    """订单评论"""
+    content = models.CharField('评论内容', max_length=512)
+    score = models.FloatField('分数', default=5)
+```
+
+#### 字段解读
+- ContentType 类容模型
+- ForeignKey(ContentType) 关联复合模型
+- GenericForeignKey 关联模型 
+- GenericRelation 反向关联
+
+<br/>更改后的示例：
+```python
+from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
+from django.contrib.contenttypes.models import ContentType
+from django.db import models
+
+
+# Create your models here.
+class Sight(models.Model):
+    """景点表"""
+    name = models.CharField('景点名称', max_length=64)
+    address = models.CharField('景点地址', max_length=64)
+    comments = GenericRelation('Comment', related_query_name='sight_comments')
+
+
+class Order(models.Model):
+    """订单表"""
+    # order = Order()
+    # comments = order.comments
+    sn = models.CharField('订单号', max_length=64)
+    amount = models.FloatField('订单金额')
+    comments = GenericRelation('Comment', related_query_name='order_comments')
+
+
+class Comment(models.Model):
+    """所有评论"""
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    content_object = GenericForeignKey('content_type', 'object_id')
+
+    content = models.CharField('评论内容', max_length=512)
+    score = models.FloatField('分数', default=5)
+```
+
+
