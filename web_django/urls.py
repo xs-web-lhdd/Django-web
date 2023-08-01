@@ -15,8 +15,11 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path, include
+from django.urls import path, include, re_path
 from hello.views import hello_world
+from django.views.static import serve
+
+from web_django import settings
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -27,3 +30,12 @@ urlpatterns = [
     # path('hello/', hello_world, name='hello_world')
     path('hello/', include('hello.urls'))
 ]
+
+if settings.DEBUG:
+    import debug_toolbar
+    urlpatterns += [
+        re_path(r'^media/(?P<path>.*)$', serve, {
+            'document_root': settings.MEDIA_ROOT,
+        }),
+        path('__debug__/', include(debug_toolbar.urls))
+    ]

@@ -539,3 +539,196 @@ user_list.update(status=0)
 <br/>物理删除：将数据从数据库干掉、干掉了就不占磁盘空间了、干掉了就找不回来了
 <br/>逻辑删除：将数据标记删除、删除后还占磁盘空间、删除后还可以恢复、删除后通过查询条件不展示给用户
 
+### 结果集合 QuerySet
+- QuerySet 表示从数据库中取出来的对象的集合
+- 它可以有零个、一个或者多个过滤器(filter)
+- 从模型的Manager那里取得QuerySet
+- QuerySet的筛选结果本身还是QuerySet
+- QuerySet是惰性的
+```python
+user_list = User.objects.all()
+user_obj = User.objects.get(pk=3)
+user_list.filter(status=1)
+# 拿到数据数量
+user_list.count()
+# 判断数据是否存在
+user_list.exists()
+# 链式查询方法
+# all() # 查询所有记录
+# none() # 创建一个空的结果集
+# using() # 使用指定的数据库查询（多数据库支持）
+# filter() # 筛选出满足条件的多条记录
+User.objects.all().filter(is_super=1).count()
+# exclude() # 排除满足条件的多条记录
+User.objects.all().exclude(is_super=1).count()
+# order_by() # 对查询的记录排序
+User.objects.all().order_by('-id')
+```
+#### 自定义模型管理器
+```python
+class User(models.Model):
+    # ...
+    users = models.Manager()
+```
+<br/>然后可以通过 `User.users.all()` 进行查询
+
+#### 获取数据库语句
+```python
+user_list = User.users.all()
+print(user_list.query)
+# SELECT `demo_user`.`id`, `demo_user`.`created_at`, `demo_user`.`updated_at`, `demo_user`.`username`, `demo_user`.`password`, `demo_user`.`nickname`, `demo_user`.`avatar`, `demo_user`.`status`, `demo_user`.`is_super` FROM `demo_user`
+```
+
+### 查询条件
+- 相等/等于/布尔条件
+- 是否包含 ** 字符串
+- 以 ** 开始/结束
+- 日期及时间
+- 外键关联
+
+#### 相等/等于
+- exact 等于 ** 中（默认的形式），如：`id_exact=6` 或者 `id=6`
+- iexact 像 ** 值，如：`name_iexact='zhangsan'`
+```python
+user_list = User.objects.all().filter(id=6)
+user_list = User.objects.all().filter(id__exact=6)
+user_list = User.objects.all().filter(username__exact='admin')
+user_list = User.objects.all().filter(username__iexact='伟杰')
+```
+#### 布尔条件
+- gt 大于某个值
+- gte 大于或等于某个值
+- lt 小于某个值
+- lte 小于或等于某个值
+- isnull 是否为空值
+```python
+User.objects.all().filter(status__gt=0)
+User.objects.all().filter(avatar__isnull=True)
+```
+#### 是否包含 ** 字符串
+- contains 包含 ** 值，如：`name_contains='san'`
+- icontains 包含 ** 值，不区分大小写，如：`name_contains='san'` # ZhangSan zhangsan 都满足条件
+- 在 ** 选项（列表）之内：`in`
+```python
+User.objects.filter(username__contains='伟杰')
+User.objects.filter(username__in=['admin', '伟杰7'])
+```
+#### 以 ** 开始/结束
+- 以 ** 开始 ``startswith`` 、`istartswith`
+- 以 ** 结束 ``endswith``、``iendswith``
+```python
+User.objects.filter(username__startswith='伟杰')
+```
+#### 日期及时间
+- date 日期
+- year 年
+- month 月份
+- day 天
+- hour/minute/second 时分秒
+- week/week_day 星期
+```python
+from datetime import datetime
+d = datetime(2025, 5, 11).date()
+User.objects.filter(created_at__date=d)
+```
+#### 外键关联
+- 查询在线问答系统中某个用户的回答 ``filter(user__username='admin')``
+```python
+# 去 profile 关联的 user 中查出用户名是 admin 的 profile 数据
+UserProfile.objects.filter(user__username='admin')
+# 去 profile 关联的 user 中查出用户名包含 伟杰 的 profile 数据
+UserProfile.objects.filter(user__username__contains='伟杰')
+```
+
+### 按多个条件查询
+#### filter 的深入使用
+```python
+# 示例：有效的管理员
+User.objects.filter(nickname__icontains='管理员').filter(status=1)
+# 或者
+User.objects.filter(nickname__icontains='管理员', status=1)
+```
+#### & 运算符
+```python
+User.objects.filter(nickname__icontains='管理员')&User.objects.filter(status=1)
+```
+#### Q() 函数
+- 使用 Q() 函数实现复杂的查询
+- Q() 函数支持 &(且)  和  |(或)，对应 SQL 中的 AND 和 OR
+```python
+from django.db.models import Q
+query1 = Q(nickname__icontains='管理员', status=1)
+User.objects.filter(query1)
+# 或者
+query2 = Q(nickname__icontains='管理员') & Q(status=1)
+User.objects.filter(query2)
+```
+
+### 查询优化
+#### 安装 Django-debug-toolbar
+去官网：`https://pypi.org/` 找 `Django-debug-toolbar` ，按照教程进行配置 `https://pypi.org/project/django-debug-toolbar/`
+
+#### 优化外键关联查询
+- QuerySet.select_related() 将外键关联的对象查询合并到主查询，一次性查询结果，减少 SQL 执行的数量
+#### 使用 SQL 查询
+- 方式一：使用管理器的 raw(sql) 函数
+```python
+raw(raw_query, params=None, translations=None)
+# 返回 django.db.models.query.RawQuerySet 实例
+```
+- 方式二：获取数据库连接、游标、直接执行sql
+  - 获取数据库连接 ``from django.db import connection``
+  - 从连接得到游标 ``cursor = connection.cursor()``
+  - 执行SQL ``cursor.execute('SELECT * FROM table WHERE baz=%s', [baz])``
+  - 查询结果 ``row = cursor.fetchone()``
+
+### 分页处理
+- 对查询结果集QuerySet进行分片
+- 使用 django.core.paginator 进行分页处理
+- 使用 ListView 进行分页
+#### 对查询结果集QuerySet进行分片
+- 返回前 n 个对象 `User.objects.all()[:10]`
+- 返回第 11 到第 20 个对象 ``User.objects.all()[10:20]``
+#### 使用 django.core.paginator 进行分页处理
+- 步骤一：取得分页器 `Paginator(objects, page_size)`
+  - objects: 要进行分页的数据
+  - page_size: 每页的数据多少
+- 步骤二：取得页面实例 `page=p.get_page(page_num)`
+  - page_num: 当前页的页码，如第几页
+<br/>示例代码：
+```python
+user_list = User.objects.all()
+p = Paginator(user_list, 15)
+# get_page 可以处理异常输入，page 不能处理异常输入
+page_data = p.get_page(3)
+page_data = p.page(3)
+```
+#### 使用 ListView 进行分页
+- page_obj 分页数据，如页码，当前第几页
+- object_list 当前页的数据列表
+
+### 聚合与统计
+#### 内置聚合函数
+- sum 求和
+- avg 求平均
+- count 计数
+- max/min 最大值/最小值
+##### 实现数据统计
+- 使用 aggregate 从整个查询结果集生成统计数据
+```python
+from django.db.models import Avg
+Grade.objects.all().aggregate(Avg('score'))
+```
+##### 实现聚合查询
+- 使用 annotate 为查询结果集中的每一项生成统计数据
+```python
+from django.db.models import Sum
+q = Student.objects.annotate(Sum('stu_grade_score'))
+```
+
+### 数据的一致性 ！！！
+F() 函数的使用
+- F() 函数从数据库操作层面修改数据
+- F() 函数可避免同时操作时竞态条件
+
+

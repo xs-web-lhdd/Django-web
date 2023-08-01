@@ -23,6 +23,8 @@ class User(CommonModel):
     status = models.SmallIntegerField('用户状态', default=1, choices=USER_STATUS)
     is_super = models.BooleanField('是否为超级用户', default=False)
 
+    # users = models.Manager()
+
     class Meta:
         db_table = 'demo_user'
 
